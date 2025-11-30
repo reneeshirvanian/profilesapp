@@ -59,6 +59,17 @@ const schema = a
       .authorization((allow) => [
         allow.ownerDefinedIn("profileOwner"),
       ]),
+     MedicationSchedule: a
+      .model({
+        name: a.string().required(),
+        time: a.string().required(), // e.g., "Mon 8:00 AM"
+        dosage: a.string(),
+        profileOwner: a.string(), 
+      }) 
+      .authorization((allow) => [
+        // Only the user who created the schedule can access it
+        allow.ownerDefinedIn("profileOwner"),
+      ]),
   })
   .authorization((allow) => [allow.resource(postConfirmation)]);
 
