@@ -17,6 +17,8 @@ import outputs from "../amplify_outputs.json";
  * @type {import('aws-amplify/data').Client<import('../amplify/data/resource').Schema>}
  */
 Amplify.configure(outputs);
+const ESP32_IP = "http://192.168.1.50";
+
 
 // Data client using Cognito user pools
 const client = generateClient({
@@ -77,12 +79,53 @@ const username =
       setLoading(false);
     }
   }
+async function sendToDevice(timeString, dispenser) { 
+    // Assumption: User enters time in "HH:MM" 24-hour format (e.g., "14:30") 
+    // If they type "2:30 PM", you will need extra logic to convert that to 14:30 first. 
+  const [hours, minutes] = timeString.split(":");
+  const DispenserNumber = Number(dispenser);
+  const payload = `SCHED:${DispenserNumber}:${hours}:${minutes}:1`;
+  console.log("Sending schedule to ESP32:", payload);
+
+  try {
+    await fetch(`${ESP32_IP}/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+    });
+    console.log("ESP32 response status:", response.status);
+    const text = await response.text();
+    console.log("ESP32 response body:", text);
+
+  } catch (error) {
+    console.error("Error sending to ESP32:", error);
+  }
+}
+
+async function sendDeleteToDevice(dispenser) {
+  const DispenserNumber = Number(dispenser);
+
+  const payload = `DELETE:${DispenserNumber}`;
+  console.log("Sending delete command to ESP32:", payload);
+
+  try {
+    await fetch(`${ESP32_IP}/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: payload,
+    });
+    console.log("ESP32 delete response:", response.status);
+
+  } catch (error) {
+    console.error("Error sending delete to ESP32:", error);
+  }
+}
 
   // Add a new schedule for this user
   async function handleAddSchedule(e) {
     e.preventDefault();
     if (!medicationName.trim() || !dosageTime.trim() || dispenser === "" || !userId) return;
-
+    sendToDevice(dosageTime, dispenser); 
     try {
       await client.models.MedicationSchedule.create({
         name: medicationName,
@@ -102,6 +145,11 @@ const username =
 
   async function handleDeleteSchedule(id) {
     try {
+      const schedule = schedules.find((s) => s.id === id);
+
+      if (schedule) {
+        await sendDeleteToDevice(schedule.dispenser);
+      }
       await client.models.MedicationSchedule.delete({ id });
 
       // Update local state so UI refreshes without full refetch
