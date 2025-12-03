@@ -65,6 +65,7 @@ const schema = a
         time: a.string().required(), // e.g., "Mon 8:00 AM"
         dosage: a.string(),
         profileOwner: a.string(), 
+        dispenser: a.integer().required(),
       }) 
       .authorization((allow) => [
         // Only the user who created the schedule can access it

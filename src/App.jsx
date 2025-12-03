@@ -29,6 +29,7 @@ export default function App() {
   const [medicationName, setMedicationName] = useState("");
   const [dosageTime, setDosageTime] = useState("");
   const [loading, setLoading] = useState(true);
+  const [dispenser, setDispenser] = useState("");
 
   // user and signOut from Amplify Authenticator
   const { user, signOut } = useAuthenticator((context) => [context.user]);
@@ -82,6 +83,7 @@ const username =
         name: medicationName,
         time: dosageTime,
         profileOwner: userId,
+        dispenser: Number(dispenser),
       });
 
       setMedicationName("");
@@ -172,12 +174,26 @@ const username =
         />
         <input
           type="text"
-          placeholder="Time (e.g., Mon 8:00 AM)"
+          placeholder="Time (e.g., 8:00 AM)"
           value={dosageTime}
           onChange={(e) => setDosageTime(e.target.value)}
           required
           style={{ padding: "8px", flexGrow: 1 }}
         />
+
+        <select
+            value={dispenser}
+            onChange={(e) => setDispenser(e.target.value)}
+            required
+            style={{ padding: "8px" }}
+          >
+            <option value="">Pick Dispenser</option>
+            <option value="0">Dispenser 0</option>
+            <option value="1">Dispenser 1</option>
+            <option value="2">Dispenser 2</option>
+            <option value="3">Dispenser 3</option>
+          </select>
+
         <Button type="submit" variation="primary">
           Add Schedule
         </Button>
@@ -212,6 +228,11 @@ const username =
               <View style={{ display: "flex", flexDirection: "column" }}>
                 <strong style={{ color: "#000" }}>{schedule.name}</strong>
                 <span style={{ color: "#333" }}>Scheduled for: {schedule.time}</span>
+
+                {/* NEW: Display dispenser */}
+                <span style={{ color: "#666", fontSize: "0.9rem" }}>
+                  Dispenser: {schedule.dispenser}
+                </span>
               </View>
               <Button
                 size="small"
@@ -222,7 +243,7 @@ const username =
               </Button>
             </Flex>
           ))}
-        /*</View>
+        </View>
       )}
 
       <Divider margin="2rem 0" />
