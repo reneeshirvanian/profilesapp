@@ -88,6 +88,7 @@ const username =
 
       setMedicationName("");
       setDosageTime("");
+      setDispenser("");         
       fetchSchedules(userId);
     } catch (error) {
       console.error("Error creating schedule:", error);
@@ -226,13 +227,18 @@ const username =
 
             >
               <View style={{ display: "flex", flexDirection: "column" }}>
-                <strong style={{ color: "#000" }}>{schedule.name}</strong>
-                <span style={{ color: "#333" }}>Scheduled for: {schedule.time}</span>
-
-                {/* NEW: Display dispenser */}
-                <span style={{ color: "#666", fontSize: "0.9rem" }}>
-                  Dispenser: {schedule.dispenser}
-                </span>
+                  <strong style={{ color: "#000" }}>
+                    {schedule?.name ?? "Unnamed medication"}
+                  </strong>
+                  <span style={{ color: "#333" }}>
+                    Scheduled for: {schedule?.time ?? "N/A"}
+                  </span>
+                  <span style={{ color: "#666", fontSize: "0.9rem" }}>
+                    Dispenser:{" "}
+                    {schedule?.dispenser !== undefined
+                      ? schedule.dispenser
+                      : "N/A"}
+                  </span>
               </View>
               <Button
                 size="small"
