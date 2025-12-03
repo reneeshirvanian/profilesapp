@@ -34,7 +34,10 @@ export default function App() {
   const { user, signOut } = useAuthenticator((context) => [context.user]);
 
   // Email + userId from Cognito user
-  const username = user?.username ?? user?.attributes?.email ?? "User";
+const username =
+  user?.signInDetails?.loginId ??     // email used to sign in
+  user?.attributes?.email ??          // fallback email
+  "User";
   const userId = user?.userId; // Cognito sub
 
   // Fetch profiles once
