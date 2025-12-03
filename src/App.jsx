@@ -92,6 +92,17 @@ const username =
     }
   }
 
+  async function handleDeleteSchedule(id) {
+    try {
+      await client.models.MedicationSchedule.delete({ id });
+
+      // Update local state so UI refreshes without full refetch
+      setSchedules((prev) => prev.filter((schedule) => schedule.id !== id));
+    } catch (error) {
+      console.error("Error deleting schedule:", error);
+    }
+  }
+
   return (
     <Flex
       className="App"
@@ -198,11 +209,20 @@ const username =
               boxShadow="0 1px 3px rgba(0,0,0,0.1)"
 
             >
-              <strong style={{ color: "#000" }}>{schedule.name}</strong>
-              <span style={{ color: "#333" }}>Scheduled for: {schedule.time}</span>
+              <View style={{ display: "flex", flexDirection: "column" }}>
+                <strong style={{ color: "#000" }}>{schedule.name}</strong>
+                <span style={{ color: "#333" }}>Scheduled for: {schedule.time}</span>
+              </View>
+              <Button
+                size="small"
+                variation="destructive"
+                onClick={() => handleDeleteSchedule(schedule.id)}
+                >
+                 −
+              </Button>
             </Flex>
           ))}
-        </View>
+        /*</View>
       )}
 
       <Divider margin="2rem 0" />
