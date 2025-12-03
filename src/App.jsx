@@ -40,6 +40,11 @@ const username =
   user?.attributes?.email ??          // fallback email
   "User";
   const userId = user?.userId; // Cognito sub
+  const usedDispensers = new Set(
+    schedules
+      .filter((s) => s && s.dispenser !== null && s.dispenser !== undefined)
+      .map((s) => s.dispenser)
+  );
 
   // Fetch profiles once
   useEffect(() => {
@@ -76,7 +81,7 @@ const username =
   // Add a new schedule for this user
   async function handleAddSchedule(e) {
     e.preventDefault();
-    if (!medicationName.trim() || !dosageTime.trim() || !userId) return;
+    if (!medicationName.trim() || !dosageTime.trim() || dispenser === "" || !userId) return;
 
     try {
       await client.models.MedicationSchedule.create({
@@ -183,16 +188,21 @@ const username =
         />
 
         <select
-            value={dispenser}
-            onChange={(e) => setDispenser(e.target.value)}
-            required
-            style={{ padding: "8px" }}
-          >
-            <option value="">Pick Dispenser</option>
-            <option value="0">Dispenser 0</option>
-            <option value="1">Dispenser 1</option>
-            <option value="2">Dispenser 2</option>
-            <option value="3">Dispenser 3</option>
+          value={dispenser}
+          onChange={(e) => setDispenser(e.target.value)}
+          required
+          style={{ padding: "8px" }}
+        >
+          <option value="">Pick Dispenser</option>
+          {[0, 1, 2, 3].map((d) => (
+            <option
+              key={d}
+              value={d}
+              disabled={usedDispensers.has(d)}   // 👈 disable if already in use
+            >
+              Dispenser {d} {usedDispensers.has(d) ? "(in use)" : ""}
+            </option>
+          ))}
           </select>
 
         <Button type="submit" variation="primary">
