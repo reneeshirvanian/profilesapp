@@ -17,7 +17,7 @@ import outputs from "../amplify_outputs.json";
  * @type {import('aws-amplify/data').Client<import('../amplify/data/resource').Schema>}
  */
 Amplify.configure(outputs);
-const ESP32_IP = "http://192.168.1.50";
+const ESP32_IP = "172.20.10.5";
 
 
 // Data client using Cognito user pools
