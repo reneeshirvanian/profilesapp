@@ -79,6 +79,53 @@ const username =
       setLoading(false);
     }
   }
+
+// Tracks if an alarm is currently going off
+  const [activeAlert, setActiveAlert] = useState(null); 
+
+  // watches the clock every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      
+      // Get current time in "HH:MM" format (24-hour)
+      // padStart to ensure "8:00" becomes "08:00" --> need to double check this!!
+      const currentHours = String(now.getHours()).padStart(2, "0");
+      const currentMinutes = String(now.getMinutes()).padStart(2, "0");
+      const currentTimeString = `${currentHours}:${currentMinutes}`;
+      const currentSeconds = now.getSeconds();
+
+      // Check exactly at the 00th second
+      if (currentSeconds === 0) {
+        // Look for a matching schedule
+        const matchingSchedule = schedules.find(s => s.time === currentTimeString);
+
+        if (matchingSchedule) {
+          console.log("⏰ TIME MATCH! Triggering Alarm for:", matchingSchedule.name);
+          triggerAlarm(matchingSchedule.name);
+        }
+      }
+    }, 1000); // Run every 1000ms
+
+    // Cleanup the timer when the app closes
+    return () => clearInterval(interval);
+  }, [schedules]); // Recreate timer if schedules change
+
+  // fires the backend alert
+  const triggerAlarm = async (medName) => {
+    // Show Visual Alert in App
+    setActiveAlert(medName);
+
+    // Call Backend AWS SNS to send the Text
+    try {
+      // "sendPillAlert" is the mutation name we added to resource.ts
+      await client.mutations.sendPillAlert(); 
+      console.log("✅ SMS Alert Sent via AWS!");
+    } catch (err) {
+      console.error("❌ Failed to send SMS:", err);
+    }
+  };
+  
 async function sendToDevice(timeString, dispenser) { 
     // Assumption: User enters time in "HH:MM" 24-hour format (e.g., "14:30") 
     // If they type "2:30 PM", you will need extra logic to convert that to 14:30 first. 
