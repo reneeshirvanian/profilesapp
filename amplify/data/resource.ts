@@ -48,6 +48,7 @@ Fetch records from the database and use them in your frontend component.
 
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 import { postConfirmation } from "../auth/post-confirmation/resource";
+import { sendAlert } from '../functions/send-alert/resource'; // Import
 
 const schema = a
   .schema({
@@ -71,8 +72,13 @@ const schema = a
         // Only the user who created the schedule can access it
         allow.ownerDefinedIn("profileOwner"),
       ]),
+    sendPillAlert: a.mutation()
+    .returns(a.json())
+    .authorization(allow => [allow.authenticated()])
+    .handler(a.handler.function(sendAlert)),
   })
   .authorization((allow) => [allow.resource(postConfirmation)]);
+  
 
 export type Schema = ClientSchema<typeof schema>;
 
