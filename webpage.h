@@ -54,8 +54,8 @@ const char page_html[] PROGMEM = R"=====(
   <h2>Pill Manager</h2>
   <div id="ws-status">Disconnected</div>
 
-  <label>Dispenser Slot (1-4):</label>
-  <input type="number" id="slot" min="1" max="4" value="1" oninput="requestSlot()">
+  <label>Dispenser Slot (0-3):</label>
+  <input type="number" id="slot" min="0" max="3" value="0" oninput="requestSlot()">
 
   <div id="formArea">
     <label>Pill Name:</label>
@@ -70,7 +70,7 @@ const char page_html[] PROGMEM = R"=====(
     <label>Schedule 3:</label>
     <input type="time" id="t3">
 
-    <button class="btn-save" onclick="sendSave()">SAVE / UPDATE</button>
+    <button id="saveBtn" class="btn-save" onclick="sendSave()">SAVE</button>
     <button id="delBtn" class="btn-del" onclick="sendDelete()">DELETE PILL</button>
   </div>
 </div>
@@ -137,15 +137,27 @@ const char page_html[] PROGMEM = R"=====(
 
         // UI Locking Logic
         var isLocked = (data.name !== "");
+        
+        // Toggle Buttons: Show Delete if locked, Show Save if unlocked
         document.getElementById("delBtn").style.display = isLocked ? "inline-block" : "none";
+        document.getElementById("saveBtn").style.display = isLocked ? "none" : "inline-block";
+        
+        // Lock the inputs
         document.getElementById("name").disabled = isLocked;
         document.getElementById("name").style.backgroundColor = isLocked ? "#e9ecef" : "white";
+        document.getElementById("t1").disabled = isLocked;
+        document.getElementById("t2").disabled = isLocked;
+        document.getElementById("t3").disabled = isLocked;
     }
 
     // 2. ALERT TRIGGER (ESP32 says "Dispense Now!")
     else if (data.type === "alert") {
         // data.msg contains the pill name, e.g. "Advil"
         handleIncomingAlert(data.msg);
+    }
+    else if (data.type === "close_alert") {
+        document.getElementById("alertOverlay").style.display = "none";
+        activePills = []; // Clear active pills so the snooze timer doesn't trigger
     }
     else if (data.type === "refresh_history") {
         // ESP32 says: "History changed, please ask for the new list"
@@ -219,6 +231,10 @@ const char page_html[] PROGMEM = R"=====(
       if(activePills.length > 0) {
         // Show the alert again
         updateAlertBox();
+
+
+        var joinedNames = activePills.join(" and "); 
+        websocket.send(JSON.stringify({ type: "snooze_alert", names: joinedNames }));
       }
       
     }, 5000);
