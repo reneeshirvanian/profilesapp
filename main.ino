@@ -3,8 +3,10 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include "time.h"
-#include "webpage.h" // Import the HTML file we just made
+#include "webpage.h"
 
 #define RXD2 7
 #define TXD2 8
@@ -13,8 +15,13 @@ const char* ssid = "Maddy";
 const char* password = "Mads2939hotspotyo";
 
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = -18000;      // Adjust for your timezone (e.g., -21600 for CST)
+const long  gmtOffset_sec = -18000;
 const int   daylightOffset_sec = 3600;
+
+// --- TELEGRAM CONFIG ---
+// user is @MaddyPill_bot, name is MaddyPillBot
+const char* botToken = "8516743744:AAFUVvnr7LvQV9efkYH3mAgJU1jbDVmibCo"; 
+const char* chatID   = "8532923835";
 
 String lastCheckedTime = "";
 
@@ -29,7 +36,7 @@ struct PillSlot {
   String t2 = "";
   String t3 = "";
 };
-PillSlot slots[5];
+PillSlot slots[4];
 
 struct HistoryItem { String name; String time; String type; };
 HistoryItem historyLog[10]; // Store last 10 events
@@ -37,7 +44,7 @@ int historyCount = 0;       // How many we have stored so far
 
 void sendToSTM32(String command) {
   Serial.println("Sent to STM32: " + command); // Show on Computer
-  Serial2.println(command);                    // Send to STM32
+  Serial2.println(command + "\n");                    // Send to STM32
 }
 
 void addHistory(String name, String type) {
@@ -113,8 +120,26 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len, AsyncWebSocket
        slots[slot].t2 = doc["t2"].as<String>();
        slots[slot].t3 = doc["t3"].as<String>();
        
-       Serial.println("Saved Slot " + String(slot));
-       sendToSTM32("SAVE:" + String(slot) + String(slots[slot].t1 + slots[slot].t2 + slots[slot].t3));
+       Serial.println("Saved Slot " + String(slot) + String(slots[slot].t1 + slots[slot].t2 + slots[slot].t3));
+       sendToSTM32("SCHED:" + String(slot) + ":" + String(slots[slot].t1) + ":1");
+       delay(50); 
+       sendToSTM32("SCHED:" + String(slot) + ":" + String(slots[slot].t2) + ":1");
+       delay(50); 
+       sendToSTM32("SCHED:" + String(slot) + ":" + String(slots[slot].t3) + ":1");
+       delay(50); 
+
+       StaticJsonDocument<200> response;
+       response["type"] = "slot_data";
+       response["slot"] = slot;
+       response["name"] = slots[slot].name;
+       response["t1"] = slots[slot].t1;
+       response["t2"] = slots[slot].t2;
+       response["t3"] = slots[slot].t3;
+
+       String output;
+       serializeJson(response, output);
+       ws.textAll(output);
+       
     }
 
     // 5. Handle "DELETE" Request
@@ -125,7 +150,9 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len, AsyncWebSocket
        slots[slot].t3 = "";
        Serial.println("Deleted Slot " + String(slot));
 
-       sendToSTM32("DELETE:" + String(slot) + String(slots[slot].t1 + slots[slot].t2 + slots[slot].t3));
+       sendToSTM32("DELETE:" + String(slot));
+       delay(50);
+      
        
        // Force refresh on client
        StaticJsonDocument<200> response;
@@ -143,7 +170,16 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len, AsyncWebSocket
 
        sendToSTM32("TAKEN:" + doc["name"].as<String>()); // prob is handled w/ load cell
     }
-    // --- NEW: REQUEST HISTORY ---
+    else if (type == "snooze_alert") {
+       String names = doc["names"].as<String>();
+       
+       // Create the message and encode spaces for the URL
+       String telegramMsg = "Snooze over! Time to take: " + names;
+       telegramMsg.replace(" ", "+"); 
+       
+       sendTelegramMessage(telegramMsg);
+       Serial.println("Sent snooze text for: " + names);
+    }
     else if (type == "get_history") {
        sendHistory(client);
     }
@@ -163,7 +199,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 void setup() {
   Serial.begin(115200);
 
-  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   Serial.println("Serial2 Started for STM32");
 
   WiFi.begin(ssid, password);
@@ -177,6 +213,7 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP()); // <--- Type this IP into your browser!
 
+  sendTelegramMessage("Pill+Dispenser+Online");
 
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   Serial.println("Waiting for time...");
@@ -184,6 +221,7 @@ void setup() {
   while(!getLocalTime(&timeinfo)){ Serial.print("."); delay(500); }
   Serial.println("\nTime Synchronized!");
 
+  
   // Define URLs
   // Setup WebSocket
   ws.onEvent(onEvent);
@@ -197,46 +235,99 @@ void setup() {
   server.begin();
 }
 
+void sendTelegramMessage(String message) {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure(); // Skip certificate validation (easiest for hobby projects)
+    
+    HTTPClient https;
+    
+    // Construct the URL
+    String url = "https://api.telegram.org/bot" + String(botToken) + 
+                 "/sendMessage?chat_id=" + String(chatID) + 
+                 "&text=" + message;
+                 
+    // Initialize connection
+    if (https.begin(client, url)) {
+      int httpCode = https.GET();
+      
+      if (httpCode > 0) {
+        Serial.printf("[HTTPS] GET... code: %d\n", httpCode);
+      } else {
+        Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+      }
+      https.end();
+    } else {
+      Serial.println("[HTTPS] Unable to connect");
+    }
+  } else {
+    Serial.println("Error: WiFi not connected");
+  }
+}
+
+
 void loop() {
   ws.cleanupClients();
   //server.handleClient(); // Listen for incoming web requests
-  struct tm timeinfo;
-  if(getLocalTime(&timeinfo)){
-    
-    // Create a string like "08:30"
-    char timeStringBuff[6];
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%H:%M", &timeinfo);
-    String currentTime = String(timeStringBuff);
-    
-    // Only check once per minute (when the minute changes)
-    if(currentTime != lastCheckedTime) {
-       lastCheckedTime = currentTime;
-       Serial.println("Checking Schedule for: " + currentTime);
+  if (Serial2.available()) {
+    String msg = Serial2.readStringUntil('\n');
+    msg.trim(); // Clean up hidden characters like \r
+    Serial.println("RX from STM32: " + msg);
 
-       // Check all 4 slots
-       for(int i=1; i<=4; i++) {
-         if(slots[i].name != "") {
-            // Check if ANY of the 3 times match
-            if(slots[i].t1 == currentTime || slots[i].t2 == currentTime || slots[i].t3 == currentTime) {
-                // 1. Log to History
-                addHistory(slots[i].name, "Dispensed");
-                
-                // 2. Alert Webpage
-                StaticJsonDocument<200> alertDoc;
-                alertDoc["type"] = "alert";
-                alertDoc["msg"] = slots[i].name; 
-                String output; serializeJson(alertDoc, output);
-                ws.textAll(output);
-                
-                // 3. Update History List on Webpage
-                ws.textAll("{\"type\":\"refresh_history\"}"); 
+    // --- A. LOAD CELL DETECTS PILL DROPPED ---
+    // Expected format from STM32: "DROPPED:0" (or 1, 2, 3)
+    if (msg.startsWith("DROPPED:")) {
+       int slotNum = msg.substring(8).toInt();
+       if (slotNum >= 0 && slotNum <= 3 && slots[slotNum].name != "") {
+           String pillName = slots[slotNum].name;
+           
+           // 1. Log to History
+           addHistory(pillName, "Dispensed");
+           
+           // 2. Alert Webpage
+           StaticJsonDocument<200> alertDoc;
+           alertDoc["type"] = "alert";
+           alertDoc["msg"] = pillName; 
+           String output; serializeJson(alertDoc, output);
+           ws.textAll(output);
 
-                sendToSTM32("DISPENSE:" + String(i)); // optional bc STM has RTC
-            }
-         }
+           // 3. Send Telegram Alert
+           String telegramMsg = "Time to take: " + pillName;
+           telegramMsg.replace(" ", "+"); 
+           sendTelegramMessage(telegramMsg);
+           
+           // 4. Update Web History UI
+           ws.textAll("{\"type\":\"refresh_history\"}"); 
        }
     }
+    else if (msg.startsWith("TAKEN:")) {
+       int slotNum = msg.substring(6).toInt();
+       if (slotNum >= 0 && slotNum <= 3 && slots[slotNum].name != "") {
+           String pillName = slots[slotNum].name;
+           
+           // Log as taken and refresh web history
+           addHistory(pillName, "Taken");
+           ws.textAll("{\"type\":\"refresh_history\"}"); 
+           
+           // Tell the webpage to turn off the alert popup
+           ws.textAll("{\"type\":\"close_alert\"}");
+       }
+    }
+    else if (msg == "GET_TIME") {
+      // Send initialization time to STM32
+      struct tm timeinfo;
+      while(!getLocalTime(&timeinfo)){ Serial.print("."); delay(500); }
+      uint8_t timeData[3];
+      timeData[0] = (uint8_t)timeinfo.tm_hour;
+      timeData[1] = (uint8_t)timeinfo.tm_min;
+      timeData[2] = (uint8_t)timeinfo.tm_sec;
+      
+      delay(50);
+      Serial2.write(timeData, 3);
+      delay(50);
+    }
   }
+  
   // --- TEST CODE END ---
   // Add your Pill Dispenser Logic / Time check here...
 }
